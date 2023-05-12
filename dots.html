@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Animated Background</title>
+    <style>
+        body, html, canvas {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<canvas id="myCanvas"></canvas>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+    // Constants
+    const DEFAULT_NEURON_SIZE = 10;
+    const DEFAULT_NEURON_COOLDOWN = 0;
+    const NEURON_COLOR = 'black';
+    const NEURON_MAX_COUNT = 50;
+    const INTERVAL_TIME = 5000;
+    const DOT_COLOR = 'white';
+    const OFFSET = 100;
+    const DOT_COUNT = 50;
+    const DOT_RADIUS = 20;
+    const NEW_NEURON_SIZE_DECREASE = 2;
+    const NEW_NEURON_COOLDOWN = 10;
+    const VELOCITY_SCALING = 300;
+
+    // Get a reference to the canvas
+    let canvas = document.getElementById('myCanvas');
+    let ctx = canvas.getContext('2d');
+
+    let isPaused = false;
+
+    // Set the canvas to fill the screen
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // New array to store the firing neurons
+    let neurons = [];
+
+    function jetColor(value){
+        let fourValue = 4 * value;
+        let red   = Math.min(fourValue - 1.5, -fourValue + 4.5);
+        let green = Math.min(fourValue - 0.5, -fourValue + 3.5);
+        let blue  = Math.min(fourValue + 0.5, -fourValue + 2.5);
+        return [Math.max(0, Math.min(255, 255 * red)),
+            Math.max(0, Math.min(255, 255 * green)),
+            Math.max(0, Math.min(255, 255 * blue))];
+    }
+
+    function colorToString(color) {
+        return 'rgb(' + color[0] + ', ' + color[1] + ', ' + color[2] + ')';
+    }
+
+
+    // Function to create a new neuron
+    function createNeuron(dot, target, size = DEFAULT_NEURON_SIZE, cooldown = DEFAULT_NEURON_COOLDOWN, nthChild = 0) {
+        let dx = target.x - dot.x;
+        let dy = target.y - dot.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        if(neurons.count > NEURON_MAX_COUNT) return;
+
+        // Normalize the size to a value between 0 and 1
+        let normalizedSize = size / DEFAULT_NEURON_SIZE;
+
+        // Use the jetColor function to get the color based on the normalized size
+        let color = colorToString(jetColor(normalizedSize));
+
+        return {
+            nthChild: nthChild,
+            x: dot.x,
+            y: dot.y,
+            size: size,
+            color: color,  // Use the color from the jetColor function
+            vx: (dx / dist) * VELOCITY_SCALING * (1+ normalizedSize),
+            vy: (dy / dist) * VELOCITY_SCALING * (1+ normalizedSize),
+            target: target,
+            cooldown: cooldown
+        };
+    }
+
+
+    setInterval(function() {
+        let dot = dots[Math.floor(Math.random() * dots.length)];
+        getConnectedDots(dot).forEach(connectedDot => {
+            neurons.push(createNeuron(dot, connectedDot));
+        });
+    }, INTERVAL_TIME);
+
+    // Function to get the dots that are connected to a given dot
+    function getConnectedDots(dot) {
+        let connectedDots = [];
+        for (let i = 0; i < triangles.length; i += 3) {
+            if (dots[triangles[i]] === dot) {
+                connectedDots.push(dots[triangles[i+1]]);
+                connectedDots.push(dots[triangles[i+2]]);
+            } else if (dots[triangles[i+1]] === dot) {
+                connectedDots.push(dots[triangles[i]]);
+                connectedDots.push(dots[triangles[i+2]]);
+            } else if (dots[triangles[i+2]] === dot) {
+                connectedDots.push(dots[triangles[i]]);
+                connectedDots.push(dots[triangles[i+1]]);
+            }
+        }
+        return connectedDots;
+    }
+
+    // Function to update the neurons
+    function updateNeurons() {
+        for (let i = neurons.length - 1; i >= 0; i--) {
+            let neuron = neurons[i];
+            neuron.x += neuron.vx / 50;
+            neuron.y += neuron.vy / 50;
+
+            // Update the neuron's velocity to move towards the target
+            let dx = neuron.target.x - neuron.x;
+            let dy = neuron.target.y - neuron.y;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            neuron.vx = (dx / dist) * VELOCITY_SCALING;
+            neuron.vy = (dy / dist) * VELOCITY_SCALING;
+            // update the neuron's opacity relative to the age of the neuron
+            // if the neuron is a child, the opacity should persist from the parent
+
+            if (neuron.nthChild > 0) {
+                // neuron.color = `rgba(0, 0, 0, ${1 / neuron.nthChild})`;
+            }
+
+            // If the neuron is very close to the target, remove it
+            if (dx * dx + dy * dy < 10) {
+
+                if (neuron.size > 3 && neuron.cooldown <= 0) { // Only create new neurons if the cooldown has expired
+                    let connectedDots = getConnectedDots(neuron.target);
+                    if (connectedDots.length >= 2) {
+                        // Randomly select two connected dots
+                        let randomIndices = [];
+                        while (randomIndices.length < 2) {
+                            let randomIndex = Math.floor(Math.random() * connectedDots.length);
+                            if (!randomIndices.includes(randomIndex)) {
+                                randomIndices.push(randomIndex);
+                            }
+                        }
+                        // Create new neurons for the selected dots
+                        randomIndices.forEach(index => {
+                            neurons.push(createNeuron(
+                                neuron.target,
+                                connectedDots[index],
+                                neuron.size - NEW_NEURON_SIZE_DECREASE,
+                                NEW_NEURON_COOLDOWN,
+                                ++neuron.nthChild)
+                            );
+                        });
+                    }
+                }
+                neurons.splice(i, 1);
+            } else if (neuron.cooldown > 0) { // Decrease the cooldown if it's greater than 0
+                neuron.cooldown--;
+            }
+
+        }
+    }
+
+    // Function to draw the neurons
+    function drawNeurons() {
+        for (let neuron of neurons) {
+            // Create a gradient that goes from the neuron to the target dot
+            let gradient = ctx.createLinearGradient(neuron.x, neuron.y, neuron.target.x, neuron.target.y);
+            gradient.addColorStop(0, neuron.color);
+            gradient.addColorStop(1, neuron.target.color);
+
+            // Draw the neuron with the gradient
+            ctx.beginPath();
+            ctx.arc(neuron.x, neuron.y, neuron.size, 0, 2 * Math.PI);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        }
+    }
+
+    // Create an array to hold the dots
+    let dots = [];
+
+    // Function to create a new dot
+    function createDot() {
+        return {
+            color: DOT_COLOR,
+            x: Math.random() * (canvas.width + 2 * OFFSET) - OFFSET,
+            y: Math.random() * (canvas.height + 2 * OFFSET) - OFFSET,
+            vx: (Math.random() - 0.5),
+            vy: (Math.random() - 0.5),
+        };
+    }
+
+    // Create dots
+    for (let i = 0; i < DOT_COUNT; i++) {
+        dots.push(createDot());
+    }
+
+    // Generate the Delaunay triangulation
+    let delaunay = d3.Delaunay.from(dots.map(dot => [dot.x, dot.y]));
+
+    // Get the triangles from the Delaunay object
+    let triangles = delaunay.triangles; // remove the let keyword to make it global
+
+    // Function to update the dots
+    function updateDots() {
+        for (let dot of dots) {
+    // dot.x += dot.vx / 1000;
+            // dot.y += dot.vy / 1000;
+
+            // If the dot goes off the edge of the screen, wrap it around
+            if (dot.x < -OFFSET) dot.x += canvas.width + 2 * OFFSET;
+            if (dot.x > canvas.width + OFFSET) dot.x -= canvas.width + 2 * OFFSET;
+            if (dot.y < -OFFSET) dot.y += canvas.height + 2 * OFFSET;
+            if (dot.y > canvas.height + OFFSET) dot.y -= canvas.height + 2 * OFFSET;
+        }
+    }
+
+    // Function to draw the dots
+    function drawDots() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw the dots
+        for (let dot of dots) {
+            ctx.beginPath();
+            ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, 2 * Math.PI);
+            ctx.fillStyle = dot.color;
+            ctx.fill();
+        }
+
+        // Draw the triangles
+        for (let i = 0; i < triangles.length; i += 3) {
+            // Create a gradient for each line
+            let gradient1 = ctx.createLinearGradient(dots[triangles[i]].x, dots[triangles[i]].y, dots[triangles[i+1]].x, dots[triangles[i+1]].y);
+            gradient1.addColorStop(0, 'rgba(0, 0, 0, 0.02)');
+            gradient1.addColorStop(1, 'rgba(0, 0, 0, 0.025)');
+            let gradient2 = ctx.createLinearGradient(dots[triangles[i+1]].x, dots[triangles[i+1]].y, dots[triangles[i+2]].x, dots[triangles[i+2]].y);
+            gradient2.addColorStop(0, 'rgba(0, 0, 0, 0.02)');
+            gradient2.addColorStop(1, 'rgba(0, 0, 0, 0.025)');
+            let gradient3 = ctx.createLinearGradient(dots[triangles[i+2]].x, dots[triangles[i+2]].y, dots[triangles[i]].x, dots[triangles[i]].y);
+            gradient3.addColorStop(0, 'rgba(0, 0, 0, 0.02)');
+            gradient3.addColorStop(1, 'rgba(0, 0, 0, 0.025)');
+
+            // Draw the lines with the gradients
+            ctx.beginPath();
+            ctx.moveTo(dots[triangles[i]].x, dots[triangles[i]].y);
+            ctx.strokeStyle = gradient1;
+            ctx.lineTo(dots[triangles[i+1]].x, dots[triangles[i+1]].y);
+            ctx.stroke();
+            ctx.strokeStyle = gradient2;
+            ctx.lineTo(dots[triangles[i+2]].x, dots[triangles[i+2]].y);
+            ctx.stroke();
+            ctx.strokeStyle = gradient3;
+            ctx.lineTo(dots[triangles[i]].x, dots[triangles[i]].y);
+            ctx.closePath();
+            ctx.stroke();
+        }
+    }
+
+    window.addEventListener('keydown', function(event) {
+        if (event.code === 'Space') {
+            isPaused = !isPaused;
+            if (!isPaused) animate();  // If the animation was paused, start it again
+        }
+    });
+
+    // Function to update and redraw the scene
+    function animate() {
+        if (isPaused) return;
+        updateDots();
+        updateNeurons();
+        drawDots();
+        drawNeurons();
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+</script>
+</body>
+</html>
