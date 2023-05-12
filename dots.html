@@ -21,7 +21,7 @@
     const DEFAULT_NEURON_COOLDOWN = 0;
     const NEURON_COLOR = 'black';
     const NEURON_MAX_COUNT = 50;
-    const INTERVAL_TIME = 5000;
+    const INTERVAL_TIME = 2000;
     const DOT_COLOR = 'white';
     const OFFSET = 100;
     const DOT_COUNT = 50;
@@ -53,6 +53,31 @@
             Math.max(0, Math.min(255, 255 * blue))];
     }
 
+    function viridisColor(value) {
+        const viridis = [
+            [0.267004, 0.004874, 0.329415],
+            [0.283072, 0.130895, 0.449241],
+            [0.262138, 0.242286, 0.520837],
+            [0.220057, 0.343307, 0.549413],
+            [0.177423, 0.437527, 0.557565],
+            [0.143343, 0.522773, 0.556295],
+            [0.119512, 0.607464, 0.540218],
+            [0.166383, 0.690856, 0.496502],
+            [0.319809, 0.770914, 0.411152],
+            [0.525776, 0.833491, 0.288127],
+            [0.762373, 0.876424, 0.137064],
+            [0.993248, 0.906157, 0.143936]
+        ];
+
+        let index = Math.min(Math.max(Math.floor(value * (viridis.length - 1)), 0), viridis.length - 2);
+        let t = value * (viridis.length - 1) - index;
+        let r = (viridis[index][0] * (1 - t) + viridis[index + 1][0] * t) * 255;
+        let g = (viridis[index][1] * (1 - t) + viridis[index + 1][1] * t) * 255;
+        let b = (viridis[index][2] * (1 - t) + viridis[index + 1][2] * t) * 255;
+
+        return [Math.round(r), Math.round(g), Math.round(b)];
+    }
+
     function colorToString(color) {
         return 'rgb(' + color[0] + ', ' + color[1] + ', ' + color[2] + ')';
     }
@@ -69,7 +94,7 @@
         let normalizedSize = size / DEFAULT_NEURON_SIZE;
 
         // Use the jetColor function to get the color based on the normalized size
-        let color = colorToString(jetColor(normalizedSize));
+        let color = colorToString(viridisColor(normalizedSize));
 
         return {
             nthChild: nthChild,
@@ -121,17 +146,17 @@
             let dx = neuron.target.x - neuron.x;
             let dy = neuron.target.y - neuron.y;
             let dist = Math.sqrt(dx * dx + dy * dy);
-            neuron.vx = (dx / dist) * VELOCITY_SCALING;
-            neuron.vy = (dy / dist) * VELOCITY_SCALING;
+            neuron.vx = (dx / dist) * VELOCITY_SCALING * (neuron.nthChild < 1 ? 1 : neuron.nthChild / 2);
+            neuron.vy = (dy / dist) * VELOCITY_SCALING * (neuron.nthChild < 1 ? 1 : neuron.nthChild / 2);
             // update the neuron's opacity relative to the age of the neuron
             // if the neuron is a child, the opacity should persist from the parent
 
             if (neuron.nthChild > 0) {
-                // neuron.color = `rgba(0, 0, 0, ${1 / neuron.nthChild})`;
+                // neuron.color = viridisColor(neuron.nthChild / 2);
             }
 
             // If the neuron is very close to the target, remove it
-            if (dx * dx + dy * dy < 10) {
+            if (dx * dx + dy * dy < (15 * (neuron.nthChild < 1 ? 1 : neuron.nthChild))) {
 
                 if (neuron.size > 3 && neuron.cooldown <= 0) { // Only create new neurons if the cooldown has expired
                     let connectedDots = getConnectedDots(neuron.target);
